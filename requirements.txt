@@ -1,0 +1,24 @@
+# LLM + Agent
+langchain
+langchain-groq
+langchain-community
+langgraph
+
+# Browser Automation
+playwright
+
+# Memory
+chromadb
+
+# API
+fastapi
+uvicorn
+python-multipart
+
+# UI
+streamlit
+
+# Utilities
+python-dotenv
+pillow
+pydantic

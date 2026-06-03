@@ -1,0 +1,7 @@
+.venv
+.env
+screenshots/
+__pycache__
+tests/
+test_*
+memory_store/
