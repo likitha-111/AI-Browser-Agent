@@ -2,6 +2,7 @@ import asyncio
 import base64
 import os
 import queue
+import shutil
 import sys
 import threading
 from pathlib import Path
@@ -92,7 +93,10 @@ def close_browser():
 def navigate_to(url: str) -> str:
     """Navigate the browser to a URL. Always include https://. Use as the first step of any task."""
     async def _fn(page):
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        wait = "networkidle" if any(s in url for s in [
+            "github.com", "twitter.com", "linkedin.com", "reddit.com"
+        ]) else "domcontentloaded"
+        await page.goto(url, wait_until=wait, timeout=30000)
         return f"✓ Navigated to: {page.url}\nTitle: '{await page.title()}'"
     try:
         return _run_in_browser(_fn)
@@ -102,11 +106,7 @@ def navigate_to(url: str) -> str:
 
 @tool
 def click_element(selector: str) -> str:
-    """
-    Click an element on the page.
-    Selector formats: CSS ('button#submit'), text ('text=Sign In'), role ('role=button[name=OK]').
-    Prefer text= selectors — they survive UI changes.
-    """
+    """Click an element. Prefer text= selectors. Examples: 'text=Sign In', 'button#submit', 'role=button[name=OK]'."""
     async def _fn(page):
         await page.click(selector, timeout=10000)
         await page.wait_for_load_state("domcontentloaded")
@@ -119,11 +119,7 @@ def click_element(selector: str) -> str:
 
 @tool
 def fill_input(selector: str, text: str) -> str:
-    """
-    Clear a form field and type text into it.
-    Selector examples: 'input[name=q]', 'placeholder=Search', 'textarea'.
-    After filling, use press_key with Enter or click the submit button.
-    """
+    """Clear a form field and type text. Examples: 'input[name=q]', 'placeholder=Search', 'textarea'."""
     async def _fn(page):
         await page.fill(selector, text, timeout=10000)
         return f"✓ Filled '{selector}' with: '{text}'"
@@ -135,10 +131,7 @@ def fill_input(selector: str, text: str) -> str:
 
 @tool
 def press_key(selector: str, key: str) -> str:
-    """
-    Press a keyboard key on an element. Common keys: Enter, Tab, Escape.
-    Use after fill_input to submit a search form.
-    """
+    """Press a keyboard key on an element. Common keys: Enter, Tab, Escape."""
     async def _fn(page):
         await page.press(selector, key)
         await page.wait_for_load_state("domcontentloaded")
@@ -153,16 +146,16 @@ def press_key(selector: str, key: str) -> str:
 def extract_text(selector: str = "body") -> str:
     """
     Extract visible text from an element. Default 'body' = full page.
-    Examples: 'h1', '#firstHeading', '.article-body', 'table'.
-    Returns up to 3000 characters.
+    Returns up to 8000 characters. Use 'body' when specific selectors fail.
+    For lists (top 5, top 10), always use 'body' to get complete content.
     """
     async def _fn(page):
         el = await page.query_selector(selector)
         if not el:
             preview = await page.inner_text("body")
-            return f"✗ Selector '{selector}' not found.\nPage preview:\n{preview[:500]}"
+            return f"✗ Selector '{selector}' not found.\nPage preview:\n{preview[:600]}"
         text = await el.inner_text()
-        return text[:3000] + ("\n...[truncated]" if len(text) > 3000 else "")
+        return text[:8000] + ("\n...[truncated]" if len(text) > 8000 else "")
     try:
         return _run_in_browser(_fn)
     except Exception as e:
@@ -170,15 +163,18 @@ def extract_text(selector: str = "body") -> str:
 
 
 @tool
-def take_screenshot(reason: str = "verify page state") -> str:
+def take_screenshot() -> str:
     """
-    Capture the current browser page as a PNG screenshot.
-    Use after navigating and whenever you need to verify the page state.
-    The 'reason' parameter is optional — you can omit it or pass any string.
+    Capture the current browser page as a PNG.
+    IMPORTANT: Call this after every navigate_to() and after completing the task.
+    The UI displays this screenshot in real time.
     """
     async def _fn(page):
         path = SCREENSHOT_DIR / "latest.png"
         await page.screenshot(path=str(path), full_page=False)
+        import time
+        ts_path = SCREENSHOT_DIR / f"shot_{int(time.time())}.png"
+        shutil.copy2(str(path), str(ts_path))
         with open(path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
         return f"✓ Screenshot saved.\nURL: {page.url}\n[img:base64:{b64[:80]}...]"
@@ -190,7 +186,7 @@ def take_screenshot(reason: str = "verify page state") -> str:
 
 @tool
 def scroll_page(direction: str = "down") -> str:
-    """Scroll the page up or down by ~600px. Use when content or buttons are off-screen."""
+    """Scroll the page up or down by ~600px."""
     async def _fn(page):
         delta = 600 if direction == "down" else -600
         await page.evaluate(f"window.scrollBy(0, {delta})")
@@ -203,7 +199,7 @@ def scroll_page(direction: str = "down") -> str:
 
 @tool
 def wait_for_element(selector: str) -> str:
-    """Wait up to 10s for an element to appear. Use after clicking something that triggers a page change."""
+    """Wait up to 10s for an element to appear. Use after actions that trigger page changes."""
     async def _fn(page):
         await page.wait_for_selector(selector, timeout=10000)
         return f"✓ Element appeared: '{selector}'"
@@ -215,7 +211,7 @@ def wait_for_element(selector: str) -> str:
 
 @tool
 def go_back() -> str:
-    """Press the browser back button to return to the previous page."""
+    """Press the browser back button."""
     async def _fn(page):
         await page.go_back(wait_until="domcontentloaded")
         return f"✓ Went back. Now on: '{await page.title()}' ({page.url})"
@@ -236,15 +232,3 @@ BROWSER_TOOLS = [
     wait_for_element,
     go_back,
 ]
-
-if __name__ == "__main__":
-    print("\n--- Tool test ---\n")
-    print("1.", navigate_to.invoke({"url": "https://www.wikipedia.org"}))
-    print("2.", fill_input.invoke({"selector": 'input[name="search"]', "text": "Python programming"}))
-    print("3.", press_key.invoke({"selector": 'input[name="search"]', "key": "Enter"}))
-    print("4.", extract_text.invoke({"selector": "#firstHeading"}))
-    print("5.", take_screenshot.invoke({}))
-    print("6.", scroll_page.invoke({"direction": "down"}))
-    print("7.", go_back.invoke({}))
-    close_browser()
-    print("\n All tools passed.\n")

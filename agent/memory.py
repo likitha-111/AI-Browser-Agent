@@ -25,25 +25,19 @@ def extract_lessons(task: str, steps: list[str], result: str) -> str:
         RESULT: <summary>
     """
     working_steps = []
-    skip_next_obs = False
 
     for i, step in enumerate(steps):
-        # Skip error observations
         if step.startswith("[Obs] ✗") or "Timeout" in step or "failed" in step.lower():
-            # Also remove the preceding [Step] that caused this failure
             if working_steps and working_steps[-1].startswith("[Step"):
                 working_steps.pop()
             continue
 
-        # Skip wait_for_element steps — they're noisy and fail often
         if "wait_for_element" in step:
             continue
 
-        # Keep successful steps and observations
         if step.startswith("[Step") or (step.startswith("[Obs] ✓") and "Screenshot" not in step):
             working_steps.append(step)
 
-    # Extract the domain from the task for context
     urls = re.findall(r'https?://[^\s,\)\'\"]+', " ".join(steps))
     domain = urls[0] if urls else "unknown"
 
