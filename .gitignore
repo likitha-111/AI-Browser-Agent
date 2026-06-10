@@ -5,3 +5,4 @@ __pycache__
 tests/
 test_*
 memory_store/
+*.pdf
