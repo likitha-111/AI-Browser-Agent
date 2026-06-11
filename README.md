@@ -173,3 +173,15 @@ Opens at `http://localhost:8501`.
 
 ---
 
+This repository was created on HuggingFace Spaces.
+
+---
+
+title: Ai Browser Agent
+emoji: 📚
+colorFrom: pink
+colorTo: purple
+sdk: docker
+pinned: false
+
+---
